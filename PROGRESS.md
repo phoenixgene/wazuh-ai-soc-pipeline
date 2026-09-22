@@ -25,3 +25,21 @@
   Update files — likely a false positive, but good practice spotting 
   and triaging it like a real analyst would.
 - Screenshots: docs/screenshots/phase2-wazuh-fim/
+
+## Phase 3 — Forensic Quarantine Script
+- Installed Python 3.14 and PyInstaller on the Windows agent (hit a 
+  pip metadata-generation error from a flaky connection — fixed with 
+  pip cache purge before reinstalling).
+- Wrote quarantine-threat.py: reads a JSON alert piped in via stdin, 
+  extracts the malicious file's path, calculates its SHA256 hash, 
+  moves it to C:\ProgramData\WazuhQuarantine renamed as <hash>.locked, 
+  then uses icacls to restrict access to SYSTEM/Administrators only. 
+  Deletion is avoided on purpose to preserve forensic evidence.
+- Compiled it to quarantine-threat.exe with PyInstaller and deployed 
+  it to Wazuh's active-response\bin folder.
+- Manually tested by piping a fake alert JSON into the .exe: confirmed 
+  the file was hashed, moved, and renamed correctly; confirmed the 
+  original was gone from its source location; confirmed via Get-Acl 
+  that only SYSTEM and Administrators have access to the quarantined 
+  file.
+- Screenshots: docs/screenshots/phase3-quarantine/
