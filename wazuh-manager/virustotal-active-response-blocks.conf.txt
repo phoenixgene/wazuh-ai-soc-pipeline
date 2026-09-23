@@ -1,0 +1,31 @@
+<!-- 
+  These are the configuration blocks added to /var/ossec/etc/ossec.conf 
+  on the Wazuh manager for Phase 4. This is not the full manager config -
+  just the new additions for VirusTotal integration and automatic 
+  active response.
+-->
+
+<ossec_config>
+  <!-- Query VirusTotal on FIM File Additions -->
+  <integration>
+    <name>virustotal</name>
+    <api_key>YOUR_VIRUSTOTAL_API_KEY</api_key>
+    <rule_id>554</rule_id>
+    <alert_format>json</alert_format>
+  </integration>
+
+  <!-- Define the Windows Quarantine Command -->
+  <command>
+    <name>quarantine-threat-win</name>
+    <executable>quarantine-threat.exe</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+
+  <!-- Trigger Active Response on VirusTotal malicious hit -->
+  <active-response>
+    <disabled>no</disabled>
+    <command>quarantine-threat-win</command>
+    <location>local</location>
+    <rules_id>87105</rules_id>
+  </active-response>
+</ossec_config>

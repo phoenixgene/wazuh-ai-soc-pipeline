@@ -43,3 +43,26 @@
   that only SYSTEM and Administrators have access to the quarantined 
   file.
 - Screenshots: docs/screenshots/phase3-quarantine/
+
+## Phase 4 — VirusTotal Integration + Automatic Active Response
+- Added VirusTotal integration, a quarantine-threat-win command 
+  definition, and an active-response rule to ossec.conf on the Wazuh 
+  manager. Backed up the original config first.
+- Restarted wazuh-manager and confirmed the integration loaded via 
+  ossec.log ("Enabling integration for: virustotal").
+- First EICAR test failed to trigger quarantine — investigated and 
+  found Windows Defender deleted the test file before Wazuh's 
+  pipeline could react. Fixed with a Defender exclusion on the 
+  monitored Downloads folders. This mirrors a real practice in 
+  production SOC environments, where the security monitoring platform 
+  needs priority access over consumer AV on watched paths.
+- Second EICAR test succeeded end-to-end, fully automatically: FIM 
+  detected the file (rule 554) -> VirusTotal flagged it, 63/70+ 
+  engines (rule 87105) -> active-response fired -> quarantine script 
+  ran automatically, hashing, moving, and locking the file with no 
+  manual trigger. Confirmed via active-responses.log and a new hash 
+  in the quarantine folder.
+- Also noticed Sysmon logging the quarantine script's own actions 
+  (icacls call flagged as "suspicious cmd shell execution") — a 
+  good example of expected noise from legitimate defensive tooling.
+- Screenshots: docs/screenshots/phase4-virustotal/
