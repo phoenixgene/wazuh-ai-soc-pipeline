@@ -66,3 +66,46 @@
   (icacls call flagged as "suspicious cmd shell execution") — a 
   good example of expected noise from legitimate defensive tooling.
 - Screenshots: docs/screenshots/phase4-virustotal/
+
+
+## Phase 5 — n8n Setup + Webhook Trigger
+- Ran n8n as a Docker container on the Wazuh manager VM (image: 
+  n8nio/n8n), with a persistent volume so workflows survive container 
+  restarts.
+- Hit a container-permissions issue running Docker without sudo (group 
+  membership hadn't taken effect in the terminal session) - worked 
+  around it by using sudo consistently for Docker commands.
+- Noticed the container doesn't auto-start after being idle/stopped - 
+  needs a manual `docker start n8n` each session for now.
+- Completed n8n's first-time setup and created an owner account.
+- Built the first workflow node: a Webhook trigger, configured as 
+  POST on path /wazuh-alerts. This will be the entry point Wazuh's 
+  alert forwarder sends data to.
+- Verified it works with a manual curl POST request - the webhook 
+  correctly captured the full JSON payload and headers.
+- Screenshots: docs/screenshots/phase5-n8n/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Note: quarantine script does not currently capture original file 
+timestamps/owner metadata before moving. Chain of custody is preserved 
+via SHA256 hash and full logging, but richer forensic metadata capture 
+is a known area for future improvement.
