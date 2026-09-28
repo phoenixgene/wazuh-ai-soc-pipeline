@@ -85,7 +85,22 @@
   correctly captured the full JSON payload and headers.
 - Screenshots: docs/screenshots/phase5-n8n/
 
-
+## Phase 5 (cont.) — PII Redaction Code Node
+- Added a second n8n node (Code, JavaScript) that takes the raw Wazuh 
+  alert and extracts only the fields needed downstream (alert ID, 
+  agent info, file path, hash, VirusTotal results), discarding the 
+  rest.
+- Implemented regex-based redaction: internal IP addresses (RFC 1918 
+  ranges) get replaced with [INTERNAL_IP_MASKED], and Windows 
+  usernames in file paths get replaced with [CORP_USER_REDACTED] - so 
+  no internal network/user details reach the external Gemini API 
+  later in the pipeline.
+- Hit a JSON escaping bug on first attempt (single vs double 
+  backslashes broke JSON.parse) - fixed and re-tested.
+- Verified with a fake Wazuh-shaped alert via curl containing a real 
+  internal IP and username: both correctly redacted in the output, 
+  all other fields passed through intact.
+- Screenshots: docs/screenshots/phase5-n8n/
 
 
 
