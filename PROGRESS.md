@@ -44,6 +44,11 @@
   file.
 - Screenshots: docs/screenshots/phase3-quarantine/
 
+Note: quarantine script does not currently capture original file 
+timestamps/owner metadata before moving. Chain of custody is preserved 
+via SHA256 hash and full logging, but richer forensic metadata capture 
+is a known area for future improvement.
+
 ## Phase 4 — VirusTotal Integration + Automatic Active Response
 - Added VirusTotal integration, a quarantine-threat-win command 
   definition, and an active-response rule to ossec.conf on the Wazuh 
@@ -104,6 +109,35 @@
 
 
 
+Note: the hash-cache node's logic was verified correct by inspection, 
+but n8n's static data feature only persists when a workflow is active 
+and triggered for real (not during manual "Execute step" testing, per 
+n8n's own docs). Full cache-hit behavior will be verified once the 
+complete pipeline is built and activated.
+
+
+
+## Phase 5 (cont.) — Google Gemini Triage Node
+- Added a Google Gemini node (model: gemini-3.5-flash after gemini-2.5-flash 
+  was deprecated for new API users - model names have moved on since the 
+  project's original architecture was written).
+- Structured the prompt using n8n's separate "System Message" option 
+  (found under the node's Options menu) for the analyst persona/
+  instructions, and a User-role message for the actual telemetry data.
+- Hit two real API errors along the way: a deprecated model ID, and a 
+  temporary "model overloaded" error on a very new preview model - 
+  switched to a more available, stable flash model to resolve both.
+- First test run revealed a subtler bug: the Prompt field defaulted to 
+  "Fixed" mode, so n8n treated {{ }} template syntax as literal text 
+  instead of evaluating it - Gemini wrote a well-structured briefing 
+  around literal placeholder strings instead of real data. Fixed by 
+  switching the field to "Expression" mode.
+- Second test succeeded fully: Gemini generated a complete, accurate 
+  incident briefing with correct MITRE ATT&CK mapping, properly 
+  redacted IP/username, accurate VirusTotal stats, correct cache 
+  status, and three specific SOC recommendations - matching every 
+  requirement in the system prompt.
+- Screenshots: docs/screenshots/phase5-n8n/
 
 
 
@@ -115,12 +149,3 @@
 
 
 
-
-
-
-
-
-Note: quarantine script does not currently capture original file 
-timestamps/owner metadata before moving. Chain of custody is preserved 
-via SHA256 hash and full logging, but richer forensic metadata capture 
-is a known area for future improvement.
