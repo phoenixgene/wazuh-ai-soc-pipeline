@@ -140,6 +140,27 @@ complete pipeline is built and activated.
 - Screenshots: docs/screenshots/phase5-n8n/
 
 
+## Phase 5 (cont.) — Discord Posting Node, End-to-End Success
+- Added an HTTP Request node to POST Gemini's briefing to Discord's 
+  API, with Authorization header (Bot token) and three interactive 
+  buttons (Isolate Host, Review Quarantined Artifact, Close Incident).
+- Hit a JSON Body "Fixed vs Expression" bug again (same root cause as 
+  the Gemini prompt issue) - fixed by moving payload construction into 
+  a dedicated Code node using JSON.stringify(), eliminating manual 
+  JSON-in-a-text-field errors entirely.
+- Hit a double-encoding bug (stringifying twice) causing a Discord 
+  "Bad Request" - fixed by returning a real object from the Code node 
+  and letting the HTTP node's own expression stringify it once.
+- Hit a second Bad Request once that was fixed - diagnosed as Discord's 
+  2000-character message limit being exceeded by Gemini's full 
+  briefing. Added a truncation safeguard in the Code node.
+- CONFIRMED FULL END-TO-END PIPELINE SUCCESS: a simulated Wazuh alert 
+  flows through Webhook -> PII/IP redaction -> hash cache check -> 
+  Gemini AI triage generation -> posted live to Discord with working 
+  interactive buttons. This is the complete core architecture of the 
+  project, verified working.
+- Screenshots: docs/screenshots/phase5-n8n/
+
 
 
 
