@@ -161,7 +161,11 @@ complete pipeline is built and activated.
   project, verified working.
 - Screenshots: docs/screenshots/phase5-n8n/
 
-
+- Exported the complete n8n workflow as soc-triage-pipeline.json and 
+  added it to n8n-workflows/. Manually redacted the Discord bot token 
+  (which had been typed directly into an HTTP header rather than 
+  stored via n8n's credential system, unlike the Gemini key) before 
+  committing - real token replaced with a placeholder.
 
 
 
