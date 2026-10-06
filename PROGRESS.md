@@ -169,6 +169,31 @@ complete pipeline is built and activated.
 
 
 
+## Phase 6 — Human-in-the-Loop Discord Interactions (in progress)
+- Built a second n8n workflow ("Discord Interaction Handler") with its 
+  own webhook at /discord-interactions.
+- Implemented Ed25519 signature verification in a Code node to confirm 
+  requests genuinely come from Discord. Hit a real Node.js gotcha: raw 
+  hex Ed25519 public keys must be manually wrapped in a fixed 12-byte 
+  DER/SPKI header before Node's crypto module will accept them - this 
+  isn't documented clearly in Node's own docs, had to verify via 
+  external sources.
+- Discovered Code nodes block Node's built-in crypto module by 
+  default - fixed by recreating the n8n Docker container with 
+  NODE_FUNCTION_ALLOW_BUILTIN=crypto set.
+- Discord's servers can't reach a local VM directly - set up ngrok to 
+  tunnel n8n's port 5678 to a public HTTPS URL for Discord to call.
+- Learned this n8n version replaced the old Active/Inactive toggle 
+  with a "Publish" button (n8n 2.0's new save/publish model) - 
+  workflows must be explicitly published for production webhook URLs 
+  to go live.
+- Successfully registered the Interactions Endpoint URL in Discord's 
+  Developer Portal - Discord's verification PING was received, 
+  correctly signature-verified, and correctly responded to.
+- Still to do: build the actual "Isolate Host" action (parse which 
+  button was clicked, call Wazuh's API to isolate the target host, 
+  send confirmation back to Discord).
+- Screenshots: docs/screenshots/phase6-hitl/
 
 
 
