@@ -1,149 +1,200 @@
-	
-name	"My workflow"
-nodes	
-0	
-parameters	
-httpMethod	"POST"
-path	"wazuh-alerts"
-options	{}
-type	"n8n-nodes-base.webhook"
-typeVersion	2.1
-position	
-0	0
-1	0
-id	"d461a39a-f662-4b26-a93c-71373de19d93"
-name	"Webhook"
-webhookId	"3e9a48dc-22d5-41bd-94bf-1ac7d1c0ad95"
-1	
-parameters	
-jsCode	'const alert = $json.body || $json;\n\n// Extract raw telemetry\nlet rawData = {\n  alert_id: alert.id || "WZ-" + Math.floor(1000 + Math.random() * 9000),\n  agent_name: alert.agent?.name || "UNKNOWN-AGENT",\n  agent_ip: alert.agent?.ip || "0.0.0.0",\n  timestamp: alert.timestamp || new Date().toISOString(),\n  file_path: alert.data?.virustotal?.source?.file || alert.syscheck?.path || "UNKNOWN",\n  sha256: alert.data?.virustotal?.source?.sha256 || alert.syscheck?.sha256_after || "UNKNOWN",\n  positives: alert.data?.virustotal?.positives || 0,\n  total_engines: alert.data?.virustotal?.total || 0,\n  rule_description: alert.rule?.description || "No description"\n};\n\n// Enterprise Data Redaction Engine\nlet serialized = JSON.stringify(rawData);\n\n// Redact RFC 1918 internal subnets (10.x.x.x, 172.16-31.x.x, 192.168.x.x)\nserialized = serialized.replace(/\\b(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2[0-9]|3[0-1])\\.\\d{1,3}\\.\\d{1,3})\\b/g, "[INTERNAL_IP_MASKED]");\n\n// Redact Windows user profile paths\nserialized = serialized.replace(/C:\\\\\\\\Users\\\\\\\\[^\\\\]+/gi, "C:\\\\\\\\Users\\\\\\\\[CORP_USER_REDACTED]");\n\nreturn [{ json: JSON.parse(serialized) }];'
-type	"n8n-nodes-base.code"
-typeVersion	2
-position	
-0	224
-1	0
-id	"842936a7-13bc-4477-a175-c920f72878ab"
-name	"Code in JavaScript"
-2	
-parameters	
-jsCode	"const staticData = $getWorkflowStaticData('global');\nstaticData.hashCache = staticData.hashCache || {};\n\nconst hash = $json.sha256;\nconst now = Date.now();\nconst CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds\n\nif (staticData.hashCache[hash] && (now - staticData.hashCache[hash].timestamp < CACHE_TTL)) {\n  $json.cache_hit = true;\n} else {\n  $json.cache_hit = false;\n  staticData.hashCache[hash] = {\n    timestamp: now\n  };\n}\n\nreturn [{ json: $json }];"
-type	"n8n-nodes-base.code"
-typeVersion	2
-position	
-0	448
-1	0
-id	"a953d3f2-987e-4cb2-9b14-1b87d40a4728"
-name	"Code in JavaScript1"
-3	
-parameters	
-modelId	
-__rl	true
-value	"models/gemini-3.5-flash"
-mode	"list"
-cachedResultName	"models/gemini-3.5-flash"
-messages	
-values	
-0	
-content	"=Telemetry Data:\n- Incident Ticket ID: {{ $json.alert_id }}\n- Endpoint: {{ $json.agent_name }} ({{ $json.agent_ip }})\n- Timestamp: {{ $json.timestamp }}\n- Target Path: {{ $json.file_path }}\n- SHA256: {{ $json.sha256 }}\n- VirusTotal Detections: {{ $json.positives }} / {{ $json.total_engines }} vendors\n- Threat Intel Cache Hit: {{ $json.cache_hit }}\n- Containment Status: Confirmed Quarantined"
-builtInTools	{}
-options	
-systemMessage	"You are an expert L1/L2 Incident Response Analyst investigating a containment event on an enterprise Windows endpoint. Generate an investigation briefing in Discord-flavored Markdown.  Requirements: 1. Incident Verdict: Classify strictly as True Positive - Quarantined. 2. Map attack stages directly to MITRE ATT&CK techniques (e.g., T1204.002, T1566). 3. Detail evidence of the response: State that the file was forensically quarantined and access permissions were stripped with icacls (forensic evidence preserved). 4. Note whether the threat intelligence was pulled fresh or served from the local cache. 5. Provide 3 specific SOC analyst recommendations. Keep the analysis concise, technical, and formatted for rapid reading."
-type	"@n8n/n8n-nodes-langchain.googleGemini"
-typeVersion	1.2
-position	
-0	592
-1	0
-id	"f155b8da-1a67-4481-a5e7-723f0c784672"
-name	"Message a model"
-credentials	
-googlePalmApi	
-id	"scsAtFqLwbtOvHHo"
-name	"Google Gemini(PaLM) Api account"
-4	
-parameters	
-method	"POST"
-url	"https://discord.com/api/v10/channels/1555192703791271996/messages"
-sendHeaders	true
-headerParameters	
-parameters	
-0	
-name	"Authorization"
-value	"Bot YOUR_DISCORD_BOT_TOKEN"
-1	
-name	"Content-Type"
-value	"application/json"
-sendBody	true
-specifyBody	"json"
-jsonBody	"={{ JSON.stringify($json) }}"
-options	{}
-type	"n8n-nodes-base.httpRequest"
-typeVersion	4.5
-position	
-0	1184
-1	0
-id	"ba8c9cf0-c7b2-49ef-a13c-11ab298b0dcf"
-name	"HTTP Request"
-5	
-parameters	
-jsCode	`const geminiParts = $json.content.parts;\nlet fullText = "";\nfor (const part of geminiParts) {\n  if (part.text) fullText += part.text;\n}\n\nif (fullText.length > 1900) {\n  fullText = fullText.substring(0, 1900) + "\\n\\n*(truncated)*";\n}\n\nconst redactedData = $('Code in JavaScript1').item.json;\n\nconst discordPayload = {\n  content: fullText,\n  components: [\n    {\n      type: 1,\n      components: [\n        {\n          type: 2,\n          style: 4,\n          label: "Isolate Host",\n          custom_id: "isolate_" + redactedData.agent_name\n        },\n        {\n          type: 2,\n          style: 2,\n          label: "Review Quarantined Artifact",\n          custom_id: "quarantine_" + redactedData.alert_id\n        },\n        {\n          type: 2,\n          style: 3,\n          label: "Close Incident",\n          custom_id: "close_" + redactedData.alert_id\n        }\n      ]\n    }\n  ]\n};\n\nreturn [{ json: discordPayload }];`
-type	"n8n-nodes-base.code"
-typeVersion	2
-position	
-0	976
-1	0
-id	"7d7c7cf8-e4e8-494f-81ae-045c1cef2cfc"
-name	"Code in JavaScript2"
-pinData	{}
-connections	
-Webhook	
-main	
-0	
-0	
-node	"Code in JavaScript"
-type	"main"
-index	0
-Code in JavaScript	
-main	
-0	
-0	
-node	"Code in JavaScript1"
-type	"main"
-index	0
-Code in JavaScript1	
-main	
-0	
-0	
-node	"Message a model"
-type	"main"
-index	0
-Message a model	
-main	
-0	
-0	
-node	"Code in JavaScript2"
-type	"main"
-index	0
-Code in JavaScript2	
-main	
-0	
-0	
-node	"HTTP Request"
-type	"main"
-index	0
-active	false
-settings	
-executionOrder	"v1"
-binaryMode	"separate"
-versionId	"2a03a2db-4935-4407-87d7-6c8d6c5a80bc"
-meta	
-templateCredsSetupCompleted	true
-instanceId	"6830c0a2d2ca3fb535b36c6a9ea3d5a656336154f77c90d19653e06e30db08a6"
-nodeGroups	[]
-id	"P5UsbEAlUzqBxWLB"
-tags	[]
-connections
-Code in JavaScript
-main
-0
-0
-type
+{
+  "name": "Wazuh Alert Triage Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wazuh-alerts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d461a39a-f662-4b26-a93c-71373de19d93",
+      "name": "Webhook",
+      "webhookId": "3e9a48dc-22d5-41bd-94bf-1ac7d1c0ad95"
+    },
+    {
+      "parameters": {
+        "jsCode": "const alert = $json.body || $json;\nconst vt = alert.data?.virustotal || {};\n\n// Real VirusTotal alerts have md5/sha1 only; the sha256 is inside the permalink URL\nconst linkMatch = (vt.permalink || \"\").match(/\\/file\\/([a-f0-9]{64})/i);\n\nlet rawData = {\n  alert_id: alert.id || \"WZ-\" + Math.floor(1000 + Math.random() * 9000),\n  agent_name: alert.agent?.name || \"UNKNOWN-AGENT\",\n  agent_ip: alert.agent?.ip || \"0.0.0.0\",\n  timestamp: alert.timestamp || new Date().toISOString(),\n  file_path: vt.source?.file || alert.syscheck?.path || \"UNKNOWN\",\n  sha256: vt.source?.sha256 || (linkMatch ? linkMatch[1] : (vt.sha1 || \"UNKNOWN\")),\n  positives: vt.positives || 0,\n  total_engines: vt.total || 0,\n  rule_description: alert.rule?.description || \"No description\"\n};\n\nlet serialized = JSON.stringify(rawData);\n\n// Mask internal IPs (RFC 1918)\nserialized = serialized.replace(/\\b(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2[0-9]|3[0-1])\\.\\d{1,3}\\.\\d{1,3})\\b/g, \"[INTERNAL_IP_MASKED]\");\n\n// Mask the Windows username in paths\nserialized = serialized.replace(/C:\\\\\\\\Users\\\\\\\\[^\\\\]+/gi, \"C:\\\\\\\\Users\\\\\\\\[CORP_USER_REDACTED]\");\n\nreturn [{ json: JSON.parse(serialized) }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "842936a7-13bc-4477-a175-c920f72878ab",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.hashCache = staticData.hashCache || {};\n\nconst hash = $json.sha256;\nconst now = Date.now();\nconst CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds\n\nif (staticData.hashCache[hash] && (now - staticData.hashCache[hash].timestamp < CACHE_TTL)) {\n  $json.cache_hit = true;\n} else {\n  $json.cache_hit = false;\n  staticData.hashCache[hash] = {\n    timestamp: now\n  };\n}\n\nreturn [{ json: $json }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "a953d3f2-987e-4cb2-9b14-1b87d40a4728",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash-lite",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.5-flash-lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Telemetry Data:\n- Incident Ticket ID: {{ $json.alert_id }}\n- Endpoint: {{ $json.agent_name }} ({{ $json.agent_ip }})\n- Timestamp: {{ $json.timestamp }}\n- Target Path: {{ $json.file_path }}\n- SHA256: {{ $json.sha256 }}\n- VirusTotal Detections: {{ $json.positives }} / {{ $json.total_engines }} vendors\n- Threat Intel Cache Hit: {{ $json.cache_hit }}\n- Containment Status: Confirmed Quarantined"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "You are an expert L1/L2 Incident Response Analyst investigating a containment event on an enterprise Windows endpoint. Generate an investigation briefing in Discord-flavored Markdown.  Requirements: 1. Incident Verdict: Classify strictly as True Positive - Quarantined. 2. Map attack stages directly to MITRE ATT&CK techniques (e.g., T1204.002, T1566). 3. Detail evidence of the response: State that the file was forensically quarantined and access permissions were stripped with icacls (forensic evidence preserved). 4. Note whether the threat intelligence was pulled fresh or served from the local cache. 5. Provide 3 specific SOC analyst recommendations. Keep the analysis concise, technical, and formatted for rapid reading."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        0
+      ],
+      "id": "f155b8da-1a67-4481-a5e7-723f0c784672",
+      "name": "Message a model",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "scsAtFqLwbtOvHHo",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/v10/channels/1555192703791271996/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bot YOUR_DISCORD_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1184,
+        0
+      ],
+      "id": "ba8c9cf0-c7b2-49ef-a13c-11ab298b0dcf",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const geminiParts = $json.content.parts;\nlet fullText = \"\";\nfor (const part of geminiParts) {\n  if (part.text) fullText += part.text;\n}\n\nif (fullText.length > 1900) {\n  fullText = fullText.substring(0, 1900) + \"\\n\\n*(truncated)*\";\n}\n\nreturn [{ json: { content: fullText } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        0
+      ],
+      "id": "7d7c7cf8-e4e8-494f-81ae-045c1cef2cfc",
+      "name": "Code in JavaScript2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "20083451-4cdc-43cf-9b96-1cc0493befa5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6830c0a2d2ca3fb535b36c6a9ea3d5a656336154f77c90d19653e06e30db08a6"
+  },
+  "nodeGroups": [],
+  "id": "P5UsbEAlUzqBxWLB",
+  "tags": []
+}

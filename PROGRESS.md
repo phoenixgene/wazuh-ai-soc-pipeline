@@ -169,33 +169,49 @@ complete pipeline is built and activated.
 
 
 
-## Phase 6 — Human-in-the-Loop Discord Interactions (in progress)
-- Built a second n8n workflow ("Discord Interaction Handler") with its 
-  own webhook at /discord-interactions.
-- Implemented Ed25519 signature verification in a Code node to confirm 
-  requests genuinely come from Discord. Hit a real Node.js gotcha: raw 
-  hex Ed25519 public keys must be manually wrapped in a fixed 12-byte 
-  DER/SPKI header before Node's crypto module will accept them - this 
-  isn't documented clearly in Node's own docs, had to verify via 
-  external sources.
-- Discovered Code nodes block Node's built-in crypto module by 
-  default - fixed by recreating the n8n Docker container with 
-  NODE_FUNCTION_ALLOW_BUILTIN=crypto set.
-- Discord's servers can't reach a local VM directly - set up ngrok to 
-  tunnel n8n's port 5678 to a public HTTPS URL for Discord to call.
-- Learned this n8n version replaced the old Active/Inactive toggle 
-  with a "Publish" button (n8n 2.0's new save/publish model) - 
-  workflows must be explicitly published for production webhook URLs 
-  to go live.
-- Successfully registered the Interactions Endpoint URL in Discord's 
-  Developer Portal - Discord's verification PING was received, 
-  correctly signature-verified, and correctly responded to.
-- Still to do: build the actual "Isolate Host" action (parse which 
-  button was clicked, call Wazuh's API to isolate the target host, 
-  send confirmation back to Discord).
-- Screenshots: docs/screenshots/phase6-hitl/
+## Phase 6 — Human-in-the-Loop Discord Interactions (scoped out)
+- Went on to build the "Isolate Host" action. Found that Wazuh's
+  built-in netsh script only blocks a single IP address, not a whole
+  machine, so I started writing my own isolation program (Windows
+  firewall rules blocking everything except the Wazuh manager). Its
+  first tests failed with no clear error, and it was tangled up with
+  unrelated problems (the Wazuh manager failing to start after boots,
+  the Windows VM losing its network).
+- Decided to scope out host isolation and all Discord buttons. The
+  automated part of the project already contains the threat and
+  informs the analyst; isolation is listed as future work that would
+  need an approval step. Stopped ngrok and removed the isolation
+  rules and program.
 
 
 
-
+## Phases 7 & 9 — Real Alerts to n8n and End-to-End Test
+- Wrote a forwarder script on the Wazuh manager (custom-n8n.py) that
+  sends each VirusTotal alert to n8n's webhook. Checked Wazuh's rules
+  for custom integrations first (argument order, file name,
+  permissions) instead of copying a script blindly.
+- Looked at a real VirusTotal alert: it only carries md5 and sha1,
+  not sha256. Updated the redaction node to take the SHA256 from the
+  permalink URL, so the hash cache works on a real hash instead of
+  "UNKNOWN" for every alert.
+- Tested the redaction node and the forwarder by hand with a
+  real-format alert before changing Wazuh's config.
+- Added the integration block to ossec.conf (backed up the file first)
+  and restarted the manager.
+- Gemini hit "high demand" errors on real runs; switching to a lighter
+  Flash model fixed it. A production version would need retry logic,
+  since shared AI APIs get overloaded.
+- Real end-to-end test: a new EICAR file on the Windows VM was
+  quarantined, flagged by VirusTotal, forwarded by Wazuh, redacted,
+  summarised by Gemini and posted to Discord with no manual steps. An
+  earlier attempt failed because the Windows agent had disconnected
+  from the manager - found by checking the agent status, not guessing.
+- Reviewed what data leaves the network: only the file hash goes to
+  VirusTotal, the file itself never leaves the endpoint, and Gemini
+  receives a redacted alert. Limits noted: free-tier Gemini data
+  terms, Discord as a consumer chat app, Defender exclusions on the
+  monitored folders, no authentication on the webhook, IPv4 only.
+- Confirmed the hash cache works on a published workflow: a repeat of 
+  the same alert was reported as served from the local cache.
+- Screenshots: docs/screenshots/phase7-discord/ and phase9-testing/
 
